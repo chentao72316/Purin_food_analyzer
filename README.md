@@ -61,8 +61,8 @@ pnpm install
 创建 `.env.local` 文件（参考 `.env.local.example`）：
 
 ```env
-ARK_API_KEY=d3c412ec-e817-415d-b896-6803f29a639a
-ARK_ENDPOINT_ID=ep-20251214002916-lthkj
+ARK_API_KEY=YOUR APT KEY
+ARK_ENDPOINT_ID=ep-2025XXXX
 ARK_API_URL=https://ark.cn-beijing.volces.com/api/v3/responses
 ```
 
