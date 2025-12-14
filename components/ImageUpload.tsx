@@ -63,7 +63,7 @@ export default function ImageUpload({ onImageSelect, selectedImage, imagePreview
 
   const handleCameraClick = useCallback(() => {
     // 移动端优先使用摄像头
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices && 'getUserMedia' in navigator.mediaDevices) {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*';
@@ -150,10 +150,13 @@ export default function ImageUpload({ onImageSelect, selectedImage, imagePreview
       ) : (
         <div className="relative w-full">
           <div className="relative w-full h-auto rounded-lg overflow-hidden border-2 border-gray-200">
-            <img
+            <Image
               src={imagePreview}
               alt="预览图片"
+              width={800}
+              height={600}
               className="w-full h-auto"
+              unoptimized
             />
           </div>
           <button

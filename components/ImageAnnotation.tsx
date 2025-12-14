@@ -282,6 +282,7 @@ export default function ImageAnnotation({ imageUrl, highPurineFoods, mediumPurin
   return (
     <div ref={containerRef} className="relative w-full flex justify-center">
       <div className="relative inline-block">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           ref={imageRef}
           src={imageUrl}
