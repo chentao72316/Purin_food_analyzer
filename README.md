@@ -61,8 +61,8 @@ pnpm install
 创建 `.env.local` 文件（参考 `.env.local.example`）：
 
 ```env
-ARK_API_KEY=d3c412ec-e817-415d-b896-6803f29a639a
-ARK_ENDPOINT_ID=ep-20251214002916-lthkj
+ARK_API_KEY=YOUR APT KEY
+ARK_ENDPOINT_ID=ep-2025XXXX
 ARK_API_URL=https://ark.cn-beijing.volces.com/api/v3/responses
 ```
 
@@ -156,7 +156,7 @@ npm start
 
 ## 注意事项
 
-1. **API密钥安全**：请勿将API密钥提交到版本控制系统，使用环境变量管理
+1. **API密钥安全**：使用环境变量管理
 2. **图片大小限制**：当前限制为10MB，可根据需要调整
 3. **支持的图片格式**：JPG、PNG、WEBP
 4. **模型响应时间**：根据网络和模型负载，识别可能需要几秒到十几秒
@@ -167,5 +167,5 @@ MIT License
 
 ## 联系方式
 
-如有问题或建议，请提交Issue或Pull Request。
+如有问题或建议，请提交@旦求誊。
 
