@@ -85,6 +85,11 @@ export async function analyzeFoodWithDoubao(imageBuffer: Buffer, mimeType: strin
       ]
     };
 
+    // 检查环境变量
+    if (!ARK_API_KEY || ARK_API_KEY === 'd3c412ec-e817-415d-b896-6803f29a639a') {
+      console.warn('警告: 使用默认API密钥，请确保在Vercel中配置了环境变量');
+    }
+
     // 调用API
     const response = await fetch(ARK_API_URL, {
       method: 'POST',
@@ -96,7 +101,13 @@ export async function analyzeFoodWithDoubao(imageBuffer: Buffer, mimeType: strin
     });
 
     if (!response.ok) {
-      throw new Error(`API请求失败: ${response.status} ${response.statusText}`);
+      const errorText = await response.text();
+      console.error('豆包API错误响应:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorText
+      });
+      throw new Error(`API请求失败: ${response.status} ${response.statusText}. ${errorText}`);
     }
 
     const data = await response.json();

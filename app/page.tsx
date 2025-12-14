@@ -58,7 +58,16 @@ export default function Home() {
       console.error('分析失败:', err);
       
       let errorMessage = '识别失败，请稍后重试';
-      if (err.response?.data?.error) {
+      
+      // 处理网络错误
+      if (err.code === 'ERR_NETWORK' || err.message?.includes('Network Error') || !err.response) {
+        errorMessage = '网络请求失败，请检查：\n1. 网络连接是否正常\n2. API服务是否可用\n3. 环境变量是否已正确配置';
+        console.error('网络错误详情:', {
+          message: err.message,
+          code: err.code,
+          stack: err.stack
+        });
+      } else if (err.response?.data?.error) {
         errorMessage = err.response.data.error;
       } else if (err.message) {
         errorMessage = err.message;
@@ -70,7 +79,7 @@ export default function Home() {
       } else if (err.response?.data?.code === ErrorCode.IMAGE_TOO_LARGE) {
         errorMessage = '图片大小超过限制，最大支持 10MB';
       } else if (err.response?.data?.code === ErrorCode.NETWORK_ERROR) {
-        errorMessage = '网络请求失败，请检查网络连接';
+        errorMessage = '网络请求失败，请检查网络连接或API配置';
       } else if (err.response?.data?.code === ErrorCode.MODEL_ERROR) {
         errorMessage = '模型识别失败，请稍后重试';
       } else if (err.response?.data?.code === ErrorCode.NO_FOOD_DETECTED) {
