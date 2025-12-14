@@ -63,7 +63,7 @@ export default function ImageUpload({ onImageSelect, selectedImage, imagePreview
 
   const handleCameraClick = useCallback(() => {
     // 移动端优先使用摄像头
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*';
