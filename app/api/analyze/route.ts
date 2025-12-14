@@ -31,11 +31,18 @@ function validateImage(file: File): { valid: boolean; error?: string; code?: Err
   return { valid: true };
 }
 
+// 配置运行时和超时时间
+export const runtime = 'nodejs';
+export const maxDuration = 60; // 60秒超时（需要Vercel Pro计划，免费版默认10秒）
+
 /**
  * POST /api/analyze - 分析食物图片
  */
 export async function POST(request: NextRequest) {
   try {
+    // 添加请求日志
+    console.log('收到分析请求');
+    
     const formData = await request.formData();
     const file = formData.get('image') as File;
 
@@ -68,7 +75,9 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(arrayBuffer);
 
     // 调用豆包API进行识别
+    console.log('开始调用豆包API，图片大小:', buffer.length, 'bytes');
     const result = await analyzeFoodWithDoubao(buffer, file.type);
+    console.log('豆包API调用成功，返回结果:', Object.keys(result));
 
     // 验证和规范化返回结果
     const analysisResult: AnalysisResult = {
@@ -102,9 +111,13 @@ export async function POST(request: NextRequest) {
     let errorCode = ErrorCode.MODEL_ERROR;
     let errorMessage = error.message || '识别失败，请稍后重试';
 
-    if (error.message?.includes('网络') || error.message?.includes('fetch')) {
+    // 处理超时错误
+    if (error.name === 'AbortError' || error.message?.includes('aborted')) {
       errorCode = ErrorCode.NETWORK_ERROR;
-      errorMessage = '网络请求失败，请检查网络连接';
+      errorMessage = '请求超时，豆包API响应时间过长。请稍后重试或使用较小的图片。';
+    } else if (error.message?.includes('网络') || error.message?.includes('fetch')) {
+      errorCode = ErrorCode.NETWORK_ERROR;
+      errorMessage = '网络请求失败，请检查网络连接或API配置';
     }
 
     return NextResponse.json<ApiResponse>(

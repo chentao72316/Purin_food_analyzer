@@ -90,7 +90,11 @@ export async function analyzeFoodWithDoubao(imageBuffer: Buffer, mimeType: strin
       console.warn('警告: 使用默认API密钥，请确保在Vercel中配置了环境变量');
     }
 
-    // 调用API
+    // 调用API（增加超时设置）
+    console.log('准备调用豆包API，URL:', ARK_API_URL);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 50000); // 50秒超时
+    
     const response = await fetch(ARK_API_URL, {
       method: 'POST',
       headers: {
@@ -98,7 +102,12 @@ export async function analyzeFoodWithDoubao(imageBuffer: Buffer, mimeType: strin
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(requestBody),
+      signal: controller.signal,
+    }).finally(() => {
+      clearTimeout(timeoutId);
     });
+    
+    console.log('豆包API响应状态:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
