@@ -128,9 +128,9 @@ export async function analyzeFoodWithDoubao(imageBuffer: Buffer, mimeType: strin
     console.log('Endpoint ID:', ARK_ENDPOINT_ID);
     
     // 创建带超时的 fetch 请求
-    // Vercel 免费版有 10 秒超时限制，我们设置 8 秒超时以确保有时间处理响应
+    // Vercel 免费版有 10 秒超时限制，我们设置 9 秒超时以确保有时间处理响应
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8秒超时
+    const timeoutId = setTimeout(() => controller.abort(), 9000); // 9秒超时，给响应处理留1秒
     
     let response: Response;
     try {
@@ -167,7 +167,16 @@ export async function analyzeFoodWithDoubao(imageBuffer: Buffer, mimeType: strin
       throw new Error(`API请求失败: ${response.status} ${response.statusText}${errorBody ? ` - ${errorBody.substring(0, 200)}` : ''}`);
     }
 
-    const data = await response.json();
+    // 读取响应体（可能需要一些时间，但通常比请求本身快）
+    let data;
+    try {
+      data = await response.json();
+    } catch (parseError) {
+      // 如果 JSON 解析失败，尝试读取文本
+      const text = await response.text();
+      console.error('JSON解析失败，响应文本:', text.substring(0, 500));
+      throw new Error(`API返回的数据格式错误，无法解析为JSON`);
+    }
     
     // 记录原始响应以便调试
     console.log('豆包API原始响应:', JSON.stringify(data, null, 2));

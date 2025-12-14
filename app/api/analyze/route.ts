@@ -90,13 +90,8 @@ export async function POST(request: NextRequest) {
 
     console.log(`开始处理图片，大小: ${(buffer.length / 1024 / 1024).toFixed(2)}MB`);
     
-    // 调用豆包API进行识别（设置超时处理）
-    const result = await Promise.race([
-      analyzeFoodWithDoubao(buffer, file.type),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('API调用超时，请尝试使用更小的图片或稍后重试')), 9000)
-      )
-    ]) as any;
+    // 调用豆包API进行识别（超时处理已在 analyzeFoodWithDoubao 函数中实现）
+    const result = await analyzeFoodWithDoubao(buffer, file.type);
     
     const processingTime = Date.now() - startTime;
     console.log(`处理完成，耗时: ${processingTime}ms`);
