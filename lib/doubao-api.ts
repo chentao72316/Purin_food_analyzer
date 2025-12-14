@@ -14,8 +14,26 @@ function imageToBase64(imageBuffer: Buffer, mimeType: string = 'image/jpeg'): st
  */
 export async function analyzeFoodWithDoubao(imageBuffer: Buffer, mimeType: string = 'image/jpeg'): Promise<any> {
   try {
+    // 检查环境变量
+    if (!ARK_API_KEY) {
+      throw new Error('ARK_API_KEY 环境变量未配置');
+    }
+    if (!ARK_ENDPOINT_ID) {
+      throw new Error('ARK_ENDPOINT_ID 环境变量未配置');
+    }
+    if (!ARK_API_URL) {
+      throw new Error('ARK_API_URL 环境变量未配置');
+    }
+
+    console.log('环境变量检查通过:', {
+      hasApiKey: !!ARK_API_KEY,
+      endpointId: ARK_ENDPOINT_ID,
+      apiUrl: ARK_API_URL,
+    });
+
     // 将图片转换为base64 data URL
     const imageBase64 = imageToBase64(imageBuffer, mimeType);
+    console.log('图片已转换为base64，长度:', imageBase64.length);
     
     // 构建请求体
     const requestBody = {
@@ -85,10 +103,6 @@ export async function analyzeFoodWithDoubao(imageBuffer: Buffer, mimeType: strin
       ]
     };
 
-    // 检查环境变量
-    if (!ARK_API_KEY || ARK_API_KEY === 'd3c412ec-e817-415d-b896-6803f29a639a') {
-      console.warn('警告: 使用默认API密钥，请确保在Vercel中配置了环境变量');
-    }
 
     // 调用API（增加超时设置）
     console.log('准备调用豆包API，URL:', ARK_API_URL);
@@ -302,8 +316,24 @@ export async function analyzeFoodWithDoubao(imageBuffer: Buffer, mimeType: strin
 
     return normalizedResult;
   } catch (error: any) {
-    console.error('豆包API调用失败:', error);
-    throw new Error(`模型识别失败: ${error.message}`);
+    console.error('豆包API调用失败 - 详细错误:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    });
+
+    // 如果是AbortError（超时），抛出特定错误
+    if (error.name === 'AbortError') {
+      throw new Error('请求超时：豆包API响应时间过长，请稍后重试');
+    }
+
+    // 如果是网络错误
+    if (error.message?.includes('fetch') || error.message?.includes('network')) {
+      throw new Error(`网络错误: ${error.message}`);
+    }
+
+    // 其他错误
+    throw new Error(`模型识别失败: ${error.message || '未知错误'}`);
   }
 }
 
