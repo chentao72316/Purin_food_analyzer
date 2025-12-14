@@ -14,26 +14,8 @@ function imageToBase64(imageBuffer: Buffer, mimeType: string = 'image/jpeg'): st
  */
 export async function analyzeFoodWithDoubao(imageBuffer: Buffer, mimeType: string = 'image/jpeg'): Promise<any> {
   try {
-    // 检查环境变量
-    if (!ARK_API_KEY) {
-      throw new Error('ARK_API_KEY 环境变量未配置');
-    }
-    if (!ARK_ENDPOINT_ID) {
-      throw new Error('ARK_ENDPOINT_ID 环境变量未配置');
-    }
-    if (!ARK_API_URL) {
-      throw new Error('ARK_API_URL 环境变量未配置');
-    }
-
-    console.log('环境变量检查通过:', {
-      hasApiKey: !!ARK_API_KEY,
-      endpointId: ARK_ENDPOINT_ID,
-      apiUrl: ARK_API_URL,
-    });
-
     // 将图片转换为base64 data URL
     const imageBase64 = imageToBase64(imageBuffer, mimeType);
-    console.log('图片已转换为base64，长度:', imageBase64.length);
     
     // 构建请求体
     const requestBody = {
@@ -48,13 +30,49 @@ export async function analyzeFoodWithDoubao(imageBuffer: Buffer, mimeType: strin
             },
             {
               type: 'input_text',
-              text: `分析食物，返回JSON。要求：
-1. 识别所有食物
-2. 每个食物的嘌呤值（mg/100g）
-3. 分类：高嘌呤>150，中嘌呤50-150，低嘌呤<50
-4. 高/中嘌呤食物返回坐标{x1,y1,x2,y2}和介绍
+              text: `请仔细分析这张图片中的食物，并返回JSON格式的结果。
 
-返回JSON格式：
+**关键要求：你必须识别的是实际的可食用食物本身，而不是容器、盘子、装饰物、背景或空区域。**
+
+要求：
+1. **仔细观察图片，识别所有实际的可食用食物**（如：刺身片、肉类、蔬菜、水果等食材本身）
+   - 必须识别食物本身，而不是盛放食物的容器（如盘子、碗、竹筒、支架等）
+   - 必须识别食物本身，而不是装饰物（如冰块、叶子、花朵等）
+   - 必须识别食物本身，而不是背景或空白区域
+   
+2. 分析每个食物的嘌呤数值（每100克食物中的嘌呤含量，单位：毫克）
+
+3. 根据嘌呤含量进行分类：
+   - 高嘌呤：>150毫克/100克
+   - 中嘌呤：50-150毫克/100克
+   - 低嘌呤：<50毫克/100克
+
+4. **坐标定位要求（极其重要）：**
+   - 坐标格式：{x1, y1, x2, y2}，表示左上角和右下角坐标
+   - 坐标原点(0,0)位于图片左上角
+   - 坐标必须基于图片的原始尺寸（像素）
+   - **必须框选实际的食物本身，精确到食物的边缘**
+   - **严禁框选以下非食物物体：**
+     * 容器（盘子、碗、竹筒、杯子等）
+     * 装饰物（冰块、叶子、花朵、支架等）
+     * 背景或空白区域
+     * 文字标签或说明牌
+   - 如果食物在容器中，只框选食物部分，不要包含容器边缘
+   - 如果同一类食物有多个区域，为每个区域分别返回坐标
+   - 坐标必须准确，框选范围应该紧贴食物的实际边界
+
+5. 返回高嘌呤食物的框选坐标和介绍信息
+
+6. 返回中嘌呤食物的框选坐标和介绍信息
+
+7. 返回低嘌呤食物的框选坐标和介绍信息（可选）
+
+**识别示例：**
+- 如果图片中有刺身拼盘，应该框选实际的刺身片（如三文鱼片、金枪鱼片等），而不是盛放刺身的盘子或支架
+- 如果图片中有装在竹筒中的食物，应该框选竹筒内的食物，而不是竹筒容器本身
+- 如果图片中有多个食物区域，应该为每个区域分别返回坐标
+
+请严格按照以下JSON格式返回：
 {
   "high_purine_foods": [
     {
@@ -85,7 +103,14 @@ export async function analyzeFoodWithDoubao(imageBuffer: Buffer, mimeType: strin
   "low_purine_foods": [
     {
       "food_name": "食物名称",
-      "purine_value": 30
+      "purine_value": 30,
+      "coordinates": {
+        "x1": 100,
+        "y1": 150,
+        "x2": 300,
+        "y2": 250
+      },
+      "description": "食物详细介绍（可选）"
     }
   ]
 }
@@ -97,14 +122,10 @@ export async function analyzeFoodWithDoubao(imageBuffer: Buffer, mimeType: strin
       ]
     };
 
-
-    // 调用API（增加超时设置）
-    // 注意：Vercel免费版函数超时是10秒，Pro版可以到60秒
-    console.log('准备调用豆包API，URL:', ARK_API_URL);
-    const controller = new AbortController();
-    // 设置超时为8秒，确保在Vercel免费版10秒限制内完成
-    // 如果需要更长时间，需要升级到Vercel Pro
-    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8秒超时（Vercel免费版限制）
+    // 调用API
+    console.log('正在调用豆包API...');
+    console.log('API URL:', ARK_API_URL);
+    console.log('Endpoint ID:', ARK_ENDPOINT_ID);
     
     const response = await fetch(ARK_API_URL, {
       method: 'POST',
@@ -113,21 +134,21 @@ export async function analyzeFoodWithDoubao(imageBuffer: Buffer, mimeType: strin
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(requestBody),
-      signal: controller.signal,
-    }).finally(() => {
-      clearTimeout(timeoutId);
     });
-    
-    console.log('豆包API响应状态:', response.status);
+
+    console.log('API响应状态:', response.status, response.statusText);
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('豆包API错误响应:', {
-        status: response.status,
-        statusText: response.statusText,
-        body: errorText
-      });
-      throw new Error(`API请求失败: ${response.status} ${response.statusText}. ${errorText}`);
+      // 尝试读取错误响应体
+      let errorBody = '';
+      try {
+        errorBody = await response.text();
+        console.error('API错误响应:', errorBody);
+      } catch (e) {
+        console.error('无法读取错误响应体');
+      }
+      
+      throw new Error(`API请求失败: ${response.status} ${response.statusText}${errorBody ? ` - ${errorBody.substring(0, 200)}` : ''}`);
     }
 
     const data = await response.json();
@@ -309,28 +330,36 @@ export async function analyzeFoodWithDoubao(imageBuffer: Buffer, mimeType: strin
       // 不抛出错误，返回空结果，让前端判断是否显示"未识别到食物"的提示
     } else {
       console.log(`识别成功: 高嘌呤${normalizedResult.high_purine_foods.length}个, 中嘌呤${normalizedResult.medium_purine_foods.length}个, 低嘌呤${normalizedResult.low_purine_foods.length}个`);
+      
+      // 检查坐标合理性（简单检查：如果所有坐标都集中在图片的很小区域内，可能是识别错误）
+      const allFoods = [
+        ...normalizedResult.high_purine_foods,
+        ...normalizedResult.medium_purine_foods,
+        ...normalizedResult.low_purine_foods
+      ].filter(food => food.coordinates);
+      
+      if (allFoods.length > 0) {
+        // 检查坐标是否都在合理范围内（假设图片至少是100x100像素）
+        const hasInvalidCoords = allFoods.some(food => {
+          const coords = food.coordinates!;
+          // 检查坐标是否明显不合理（比如都是0或负数，或者x2 < x1, y2 < y1）
+          if (coords.x1 < 0 || coords.y1 < 0 || coords.x2 <= coords.x1 || coords.y2 <= coords.y1) {
+            console.warn(`食物 "${food.food_name}" 的坐标可能无效:`, coords);
+            return true;
+          }
+          return false;
+        });
+        
+        if (hasInvalidCoords) {
+          console.warn('检测到部分食物的坐标可能无效，请检查识别结果');
+        }
+      }
     }
 
     return normalizedResult;
   } catch (error: any) {
-    console.error('豆包API调用失败 - 详细错误:', {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-    });
-
-    // 如果是AbortError（超时），抛出特定错误
-    if (error.name === 'AbortError') {
-      throw new Error('请求超时：豆包API响应时间过长，请稍后重试');
-    }
-
-    // 如果是网络错误
-    if (error.message?.includes('fetch') || error.message?.includes('network')) {
-      throw new Error(`网络错误: ${error.message}`);
-    }
-
-    // 其他错误
-    throw new Error(`模型识别失败: ${error.message || '未知错误'}`);
+    console.error('豆包API调用失败:', error);
+    throw new Error(`模型识别失败: ${error.message}`);
   }
 }
 

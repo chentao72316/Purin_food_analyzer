@@ -41,7 +41,7 @@ export default function FoodInfoCard({ foods, title, bgColor, borderColor }: Foo
               </span>
             </div>
             {food.description && (
-              <p className="text-sm text-gray-700 mt-2 leading-relaxed">
+              <p className="text-sm mt-2 leading-relaxed" style={{ color: borderColor }}>
                 {food.description}
               </p>
             )}

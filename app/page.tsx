@@ -58,16 +58,7 @@ export default function Home() {
       console.error('分析失败:', err);
       
       let errorMessage = '识别失败，请稍后重试';
-      
-      // 处理网络错误
-      if (err.code === 'ERR_NETWORK' || err.message?.includes('Network Error') || !err.response) {
-        errorMessage = '网络请求失败，请检查：\n1. 网络连接是否正常\n2. API服务是否可用\n3. 环境变量是否已正确配置';
-        console.error('网络错误详情:', {
-          message: err.message,
-          code: err.code,
-          stack: err.stack
-        });
-      } else if (err.response?.data?.error) {
+      if (err.response?.data?.error) {
         errorMessage = err.response.data.error;
       } else if (err.message) {
         errorMessage = err.message;
@@ -79,7 +70,7 @@ export default function Home() {
       } else if (err.response?.data?.code === ErrorCode.IMAGE_TOO_LARGE) {
         errorMessage = '图片大小超过限制，最大支持 10MB';
       } else if (err.response?.data?.code === ErrorCode.NETWORK_ERROR) {
-        errorMessage = '网络请求失败，请检查网络连接或API配置';
+        errorMessage = '网络请求失败，请检查网络连接';
       } else if (err.response?.data?.code === ErrorCode.MODEL_ERROR) {
         errorMessage = '模型识别失败，请稍后重试';
       } else if (err.response?.data?.code === ErrorCode.NO_FOOD_DETECTED) {
@@ -188,15 +179,19 @@ export default function Home() {
             {/* 低嘌呤食物（可选展示） */}
             {analysisResult.low_purine_foods.length > 0 && (
               <div className="bg-white rounded-lg shadow-lg p-6">
-                <h2 className="text-xl font-bold mb-4 text-gray-700">低嘌呤食物 (&lt;50mg/100g)</h2>
+                <h2 className="text-xl font-bold mb-4" style={{ color: '#00FF00' }}>低嘌呤食物 (&lt;50mg/100g)</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
                   {analysisResult.low_purine_foods.map((food, index) => (
                     <div
                       key={index}
-                      className="text-center p-2 bg-gray-50 rounded border border-gray-200"
+                      className="text-center p-2 rounded border-2"
+                      style={{
+                        backgroundColor: '#F0FFF0',
+                        borderColor: '#00FF00',
+                      }}
                     >
-                      <p className="text-sm font-medium text-gray-700">{food.food_name}</p>
-                      <p className="text-xs text-gray-500">{food.purine_value} mg/100g</p>
+                      <p className="text-sm font-medium" style={{ color: '#00FF00' }}>{food.food_name}</p>
+                      <p className="text-xs font-semibold" style={{ color: '#00FF00' }}>{food.purine_value} mg/100g</p>
                     </div>
                   ))}
                 </div>

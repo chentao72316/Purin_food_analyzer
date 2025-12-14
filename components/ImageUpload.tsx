@@ -3,94 +3,6 @@
 import { useState, useRef, useCallback } from 'react';
 import Image from 'next/image';
 
-/**
- * 压缩图片
- * @param file 原始图片文件
- * @param maxWidth 最大宽度（默认1920）
- * @param maxHeight 最大高度（默认1920）
- * @param quality 压缩质量 0-1（默认0.8）
- * @returns 压缩后的文件
- */
-function compressImage(
-  file: File,
-  maxWidth: number = 1920,
-  maxHeight: number = 1920,
-  quality: number = 0.8
-): Promise<File> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    
-    reader.onload = (e) => {
-      const img = new Image();
-      
-      img.onload = () => {
-        // 计算新尺寸，保持宽高比
-        let width = img.width;
-        let height = img.height;
-        
-        if (width > maxWidth || height > maxHeight) {
-          const ratio = Math.min(maxWidth / width, maxHeight / height);
-          width = width * ratio;
-          height = height * ratio;
-        }
-        
-        // 创建canvas进行压缩
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          reject(new Error('无法创建canvas上下文'));
-          return;
-        }
-        
-        // 绘制图片到canvas
-        ctx.drawImage(img, 0, 0, width, height);
-        
-        // 转换为blob
-        canvas.toBlob(
-          (blob) => {
-            if (blob) {
-              // 创建新的File对象
-              const compressedFile = new File([blob], file.name, {
-                type: file.type,
-                lastModified: Date.now(),
-              });
-              
-              console.log('图片压缩完成:', {
-                原始大小: `${(file.size / 1024).toFixed(2)} KB`,
-                压缩后大小: `${(compressedFile.size / 1024).toFixed(2)} KB`,
-                压缩率: `${((1 - compressedFile.size / file.size) * 100).toFixed(1)}%`,
-                原始尺寸: `${img.width}x${img.height}`,
-                压缩后尺寸: `${width}x${height}`,
-              });
-              
-              resolve(compressedFile);
-            } else {
-              reject(new Error('图片压缩失败'));
-            }
-          },
-          file.type,
-          quality
-        );
-      };
-      
-      img.onerror = () => {
-        reject(new Error('图片加载失败'));
-      };
-      
-      img.src = e.target?.result as string;
-    };
-    
-    reader.onerror = () => {
-      reject(new Error('文件读取失败'));
-    };
-    
-    reader.readAsDataURL(file);
-  });
-}
-
 interface ImageUploadProps {
   onImageSelect: (file: File) => void;
   selectedImage: File | null;
@@ -101,7 +13,7 @@ export default function ImageUpload({ onImageSelect, selectedImage, imagePreview
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFile = useCallback(async (file: File) => {
+  const handleFile = useCallback((file: File) => {
     // 验证文件类型
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
@@ -115,43 +27,7 @@ export default function ImageUpload({ onImageSelect, selectedImage, imagePreview
       return;
     }
 
-    try {
-      // 如果图片大于1MB，自动压缩
-      let processedFile = file;
-      
-      if (file.size > 1024 * 1024) { // 大于1MB
-        console.log('图片较大，开始压缩...');
-        // 根据文件大小调整压缩参数
-        let maxWidth = 1920;
-        let maxHeight = 1920;
-        let quality = 0.8;
-        
-        if (file.size > 5 * 1024 * 1024) { // 大于5MB，更激进的压缩
-          maxWidth = 1600;
-          maxHeight = 1600;
-          quality = 0.7;
-        } else if (file.size > 2 * 1024 * 1024) { // 大于2MB
-          maxWidth = 1800;
-          maxHeight = 1800;
-          quality = 0.75;
-        }
-        
-        processedFile = await compressImage(file, maxWidth, maxHeight, quality);
-        
-        // 如果压缩后仍然很大，再次压缩
-        if (processedFile.size > 1024 * 1024) {
-          console.log('压缩后仍然较大，进行二次压缩...');
-          processedFile = await compressImage(processedFile, 1600, 1600, 0.7);
-        }
-      }
-      
-      onImageSelect(processedFile);
-    } catch (error: any) {
-      console.error('图片处理失败:', error);
-      alert(`图片处理失败: ${error.message}。将使用原始图片。`);
-      // 如果压缩失败，使用原始文件
-      onImageSelect(file);
-    }
+    onImageSelect(file);
   }, [onImageSelect]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -187,7 +63,7 @@ export default function ImageUpload({ onImageSelect, selectedImage, imagePreview
 
   const handleCameraClick = useCallback(() => {
     // 移动端优先使用摄像头
-    if (typeof navigator !== 'undefined' && navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*';

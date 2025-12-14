@@ -31,25 +31,11 @@ function validateImage(file: File): { valid: boolean; error?: string; code?: Err
   return { valid: true };
 }
 
-// 配置运行时和超时时间
-export const runtime = 'nodejs';
-// 注意：Vercel免费版最大超时是10秒，Pro版可以到60秒
-// 如果遇到超时，建议：1) 升级到Vercel Pro 2) 压缩图片大小 3) 优化提示词
-export const maxDuration = 10; // Vercel免费版限制为10秒
-
 /**
  * POST /api/analyze - 分析食物图片
  */
 export async function POST(request: NextRequest) {
   try {
-    // 添加请求日志
-    console.log('收到分析请求');
-    console.log('环境变量检查:', {
-      hasArkApiKey: !!process.env.ARK_API_KEY,
-      hasArkEndpointId: !!process.env.ARK_ENDPOINT_ID,
-      hasArkApiUrl: !!process.env.ARK_API_URL,
-    });
-    
     const formData = await request.formData();
     const file = formData.get('image') as File;
 
@@ -82,9 +68,7 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(arrayBuffer);
 
     // 调用豆包API进行识别
-    console.log('开始调用豆包API，图片大小:', buffer.length, 'bytes');
     const result = await analyzeFoodWithDoubao(buffer, file.type);
-    console.log('豆包API调用成功，返回结果:', Object.keys(result));
 
     // 验证和规范化返回结果
     const analysisResult: AnalysisResult = {
@@ -112,46 +96,34 @@ export async function POST(request: NextRequest) {
       message: '识别成功',
     });
   } catch (error: any) {
-    // 详细记录错误信息
-    console.error('分析失败 - 详细错误信息:', {
-      name: error.name,
+    console.error('分析失败:', error);
+    console.error('错误堆栈:', error.stack);
+    console.error('错误详情:', {
       message: error.message,
-      stack: error.stack,
+      name: error.name,
       cause: error.cause,
     });
 
     // 判断错误类型
     let errorCode = ErrorCode.MODEL_ERROR;
     let errorMessage = error.message || '识别失败，请稍后重试';
-    let statusCode = 500;
 
-    // 处理超时错误
-    if (error.name === 'AbortError' || error.message?.includes('aborted')) {
+    // 更详细的错误分类
+    if (error.message?.includes('网络') || error.message?.includes('fetch') || error.message?.includes('ECONNREFUSED') || error.message?.includes('ETIMEDOUT')) {
       errorCode = ErrorCode.NETWORK_ERROR;
-      errorMessage = '请求超时，豆包API响应时间过长。请稍后重试或使用较小的图片。';
-      statusCode = 504; // Gateway Timeout
-    } 
-    // 处理网络错误
-    else if (error.message?.includes('网络') || error.message?.includes('fetch') || error.message?.includes('Network')) {
-      errorCode = ErrorCode.NETWORK_ERROR;
-      errorMessage = '网络请求失败，请检查网络连接或API配置';
-      statusCode = 502; // Bad Gateway
-    }
-    // 处理API错误
-    else if (error.message?.includes('API请求失败') || error.message?.includes('401') || error.message?.includes('403')) {
+      errorMessage = '网络请求失败，请检查网络连接或API服务是否可用';
+    } else if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
       errorCode = ErrorCode.MODEL_ERROR;
-      errorMessage = '豆包API调用失败，请检查API密钥配置';
-      statusCode = 502;
-    }
-    // 处理其他错误
-    else {
-      // 在生产环境中，不暴露详细的错误堆栈
-      if (process.env.NODE_ENV === 'production') {
-        errorMessage = '服务器内部错误，请稍后重试。如果问题持续，请联系技术支持。';
-      } else {
-        // 开发环境中显示详细错误
-        errorMessage = `${errorMessage} (${error.name})`;
-      }
+      errorMessage = 'API密钥无效，请检查环境变量配置';
+    } else if (error.message?.includes('403') || error.message?.includes('Forbidden')) {
+      errorCode = ErrorCode.MODEL_ERROR;
+      errorMessage = 'API访问被拒绝，请检查API密钥权限';
+    } else if (error.message?.includes('429') || error.message?.includes('Too Many Requests')) {
+      errorCode = ErrorCode.MODEL_ERROR;
+      errorMessage = 'API调用频率过高，请稍后再试';
+    } else if (error.message?.includes('JSON') || error.message?.includes('解析')) {
+      errorCode = ErrorCode.MODEL_ERROR;
+      errorMessage = '模型返回数据格式错误，请重试或联系技术支持';
     }
 
     return NextResponse.json<ApiResponse>(
@@ -159,12 +131,8 @@ export async function POST(request: NextRequest) {
         success: false,
         error: errorMessage,
         code: errorCode,
-        // 仅在开发环境返回详细错误
-        ...(process.env.NODE_ENV !== 'production' && { 
-          details: error.stack 
-        }),
       },
-      { status: statusCode }
+      { status: 500 }
     );
   }
 }
