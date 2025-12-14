@@ -31,11 +31,32 @@ function validateImage(file: File): { valid: boolean; error?: string; code?: Err
   return { valid: true };
 }
 
+// 配置运行时为 Edge Runtime 以获得更好的性能（可选）
+// export const runtime = 'edge'; // 如果需要，可以取消注释
+
 /**
  * POST /api/analyze - 分析食物图片
  */
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
+  
   try {
+    // 检查环境变量
+    if (!process.env.ARK_API_KEY || !process.env.ARK_ENDPOINT_ID) {
+      console.error('环境变量未配置:', {
+        hasApiKey: !!process.env.ARK_API_KEY,
+        hasEndpointId: !!process.env.ARK_ENDPOINT_ID,
+      });
+      return NextResponse.json<ApiResponse>(
+        {
+          success: false,
+          error: '服务器配置错误：API密钥未配置，请检查Vercel环境变量设置',
+          code: ErrorCode.MODEL_ERROR,
+        },
+        { status: 500 }
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get('image') as File;
 
@@ -67,8 +88,18 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // 调用豆包API进行识别
-    const result = await analyzeFoodWithDoubao(buffer, file.type);
+    console.log(`开始处理图片，大小: ${(buffer.length / 1024 / 1024).toFixed(2)}MB`);
+    
+    // 调用豆包API进行识别（设置超时处理）
+    const result = await Promise.race([
+      analyzeFoodWithDoubao(buffer, file.type),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('API调用超时，请尝试使用更小的图片或稍后重试')), 9000)
+      )
+    ]) as any;
+    
+    const processingTime = Date.now() - startTime;
+    console.log(`处理完成，耗时: ${processingTime}ms`);
 
     // 验证和规范化返回结果
     const analysisResult: AnalysisResult = {
@@ -96,7 +127,9 @@ export async function POST(request: NextRequest) {
       message: '识别成功',
     });
   } catch (error: any) {
+    const processingTime = Date.now() - startTime;
     console.error('分析失败:', error);
+    console.error('处理耗时:', `${processingTime}ms`);
     console.error('错误堆栈:', error.stack);
     console.error('错误详情:', {
       message: error.message,
@@ -107,23 +140,34 @@ export async function POST(request: NextRequest) {
     // 判断错误类型
     let errorCode = ErrorCode.MODEL_ERROR;
     let errorMessage = error.message || '识别失败，请稍后重试';
+    let httpStatus = 500;
 
     // 更详细的错误分类
-    if (error.message?.includes('网络') || error.message?.includes('fetch') || error.message?.includes('ECONNREFUSED') || error.message?.includes('ETIMEDOUT')) {
+    if (error.message?.includes('超时') || error.message?.includes('timeout') || error.message?.includes('Timeout') || processingTime > 9000) {
       errorCode = ErrorCode.NETWORK_ERROR;
-      errorMessage = '网络请求失败，请检查网络连接或API服务是否可用';
+      errorMessage = '请求超时，Vercel免费版有10秒限制。请尝试：1) 使用更小的图片（建议小于2MB）2) 稍后重试 3) 升级到Vercel Pro计划以获得更长的超时时间';
+      httpStatus = 504; // Gateway Timeout
+    } else if (error.message?.includes('网络') || error.message?.includes('fetch') || error.message?.includes('ECONNREFUSED') || error.message?.includes('ETIMEDOUT') || error.message?.includes('ERR_CONNECTION_CLOSED')) {
+      errorCode = ErrorCode.NETWORK_ERROR;
+      errorMessage = '网络请求失败。可能原因：1) API服务不可用 2) 请求超时 3) 网络连接问题。请检查Vercel函数日志获取详细信息。';
+      httpStatus = 502; // Bad Gateway
     } else if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
       errorCode = ErrorCode.MODEL_ERROR;
-      errorMessage = 'API密钥无效，请检查环境变量配置';
+      errorMessage = 'API密钥无效，请检查Vercel环境变量中的ARK_API_KEY配置';
+      httpStatus = 401;
     } else if (error.message?.includes('403') || error.message?.includes('Forbidden')) {
       errorCode = ErrorCode.MODEL_ERROR;
       errorMessage = 'API访问被拒绝，请检查API密钥权限';
+      httpStatus = 403;
     } else if (error.message?.includes('429') || error.message?.includes('Too Many Requests')) {
       errorCode = ErrorCode.MODEL_ERROR;
       errorMessage = 'API调用频率过高，请稍后再试';
+      httpStatus = 429;
     } else if (error.message?.includes('JSON') || error.message?.includes('解析')) {
       errorCode = ErrorCode.MODEL_ERROR;
       errorMessage = '模型返回数据格式错误，请重试或联系技术支持';
+    } else if (error.message?.includes('服务器配置错误') || error.message?.includes('环境变量')) {
+      httpStatus = 500;
     }
 
     return NextResponse.json<ApiResponse>(
@@ -132,7 +176,7 @@ export async function POST(request: NextRequest) {
         error: errorMessage,
         code: errorCode,
       },
-      { status: 500 }
+      { status: httpStatus }
     );
   }
 }

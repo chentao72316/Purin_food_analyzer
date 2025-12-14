@@ -127,14 +127,30 @@ export async function analyzeFoodWithDoubao(imageBuffer: Buffer, mimeType: strin
     console.log('API URL:', ARK_API_URL);
     console.log('Endpoint ID:', ARK_ENDPOINT_ID);
     
-    const response = await fetch(ARK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${ARK_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-    });
+    // 创建带超时的 fetch 请求
+    // Vercel 免费版有 10 秒超时限制，我们设置 8 秒超时以确保有时间处理响应
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8秒超时
+    
+    let response: Response;
+    try {
+      response = await fetch(ARK_API_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${ARK_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('API请求超时，请稍后重试。如果问题持续，请尝试使用更小的图片。');
+      }
+      throw error;
+    }
 
     console.log('API响应状态:', response.status, response.statusText);
 
