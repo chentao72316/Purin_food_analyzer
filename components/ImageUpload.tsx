@@ -11,9 +11,85 @@ interface ImageUploadProps {
 
 export default function ImageUpload({ onImageSelect, selectedImage, imagePreview }: ImageUploadProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const [isCompressing, setIsCompressing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFile = useCallback((file: File) => {
+  /**
+   * 压缩图片
+   * @param file 原始图片文件
+   * @param maxWidth 最大宽度（默认1920）
+   * @param maxHeight 最大高度（默认1920）
+   * @param quality 压缩质量 0-1（默认0.8）
+   * @returns 压缩后的File对象
+   */
+  const compressImage = useCallback((file: File, maxWidth: number = 1920, maxHeight: number = 1920, quality: number = 0.8): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = document.createElement('img');
+        img.onload = () => {
+          // 计算新尺寸，保持宽高比
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth || height > maxHeight) {
+            if (width > height) {
+              height = (height * maxWidth) / width;
+              width = maxWidth;
+            } else {
+              width = (width * maxHeight) / height;
+              height = maxHeight;
+            }
+          }
+
+          // 创建canvas进行压缩
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          
+          if (!ctx) {
+            reject(new Error('无法创建canvas上下文'));
+            return;
+          }
+
+          // 绘制图片
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // 转换为blob
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                reject(new Error('图片压缩失败'));
+                return;
+              }
+
+              // 如果压缩后比原图大，使用原图
+              if (blob.size >= file.size) {
+                resolve(file);
+                return;
+              }
+
+              // 创建新的File对象
+              const compressedFile = new File([blob], file.name, {
+                type: file.type,
+                lastModified: Date.now(),
+              });
+              resolve(compressedFile);
+            },
+            file.type,
+            quality
+          );
+        };
+        img.onerror = () => reject(new Error('图片加载失败'));
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => reject(new Error('文件读取失败'));
+      reader.readAsDataURL(file);
+    });
+  }, []);
+
+  const handleFile = useCallback(async (file: File) => {
     // 验证文件类型
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
@@ -27,8 +103,41 @@ export default function ImageUpload({ onImageSelect, selectedImage, imagePreview
       return;
     }
 
-    onImageSelect(file);
-  }, [onImageSelect]);
+    // 如果图片大于1MB，进行压缩
+    if (file.size > 1 * 1024 * 1024) {
+      setIsCompressing(true);
+      try {
+        // 根据文件大小调整压缩参数
+        let maxWidth = 1920;
+        let maxHeight = 1920;
+        let quality = 0.8;
+
+        if (file.size > 5 * 1024 * 1024) {
+          // 大于5MB，更激进的压缩
+          maxWidth = 1280;
+          maxHeight = 1280;
+          quality = 0.7;
+        } else if (file.size > 2 * 1024 * 1024) {
+          // 大于2MB，中等压缩
+          maxWidth = 1600;
+          maxHeight = 1600;
+          quality = 0.75;
+        }
+
+        const compressedFile = await compressImage(file, maxWidth, maxHeight, quality);
+        console.log(`图片压缩: ${(file.size / 1024 / 1024).toFixed(2)}MB -> ${(compressedFile.size / 1024 / 1024).toFixed(2)}MB`);
+        onImageSelect(compressedFile);
+      } catch (error) {
+        console.error('图片压缩失败，使用原图:', error);
+        onImageSelect(file);
+      } finally {
+        setIsCompressing(false);
+      }
+    } else {
+      // 小于1MB，直接使用原图
+      onImageSelect(file);
+    }
+  }, [onImageSelect, compressImage]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -122,7 +231,15 @@ export default function ImageUpload({ onImageSelect, selectedImage, imagePreview
               <p className="text-sm text-gray-500 mt-2">
                 支持 JPG、PNG、WEBP 格式，最大 10MB
               </p>
+              <p className="text-xs text-gray-400 mt-1">
+                大图片将自动压缩以加快处理速度
+              </p>
             </div>
+            {isCompressing && (
+              <div className="text-sm text-blue-600">
+                正在压缩图片...
+              </div>
+            )}
             <div className="flex gap-4 mt-4">
               <button
                 type="button"
