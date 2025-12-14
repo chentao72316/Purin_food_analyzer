@@ -33,7 +33,9 @@ function validateImage(file: File): { valid: boolean; error?: string; code?: Err
 
 // 配置运行时和超时时间
 export const runtime = 'nodejs';
-export const maxDuration = 60; // 60秒超时（需要Vercel Pro计划，免费版默认10秒）
+// 注意：Vercel免费版最大超时是10秒，Pro版可以到60秒
+// 如果遇到超时，建议：1) 升级到Vercel Pro 2) 压缩图片大小 3) 优化提示词
+export const maxDuration = 10; // Vercel免费版限制为10秒
 
 /**
  * POST /api/analyze - 分析食物图片
@@ -42,6 +44,11 @@ export async function POST(request: NextRequest) {
   try {
     // 添加请求日志
     console.log('收到分析请求');
+    console.log('环境变量检查:', {
+      hasArkApiKey: !!process.env.ARK_API_KEY,
+      hasArkEndpointId: !!process.env.ARK_ENDPOINT_ID,
+      hasArkApiUrl: !!process.env.ARK_API_URL,
+    });
     
     const formData = await request.formData();
     const file = formData.get('image') as File;

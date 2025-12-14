@@ -48,19 +48,13 @@ export async function analyzeFoodWithDoubao(imageBuffer: Buffer, mimeType: strin
             },
             {
               type: 'input_text',
-              text: `请分析这张图片中的食物，并返回JSON格式的结果。要求：
-1. 识别图片中的所有食物
-2. 分析每个食物的嘌呤数值（每100克食物中的嘌呤含量，单位：毫克）
-3. 根据嘌呤含量进行分类：
-   - 高嘌呤：>150毫克/100克
-   - 中嘌呤：50-150毫克/100克
-   - 低嘌呤：<50毫克/100克
-4. 返回高嘌呤食物的框选坐标（按组返回），坐标格式：{x1, y1, x2, y2}，表示左上角和右下角坐标，坐标原点(0,0)位于图片左上角
-5. 返回中嘌呤食物的框选坐标（按组返回），坐标格式同上
-6. 返回高嘌呤食物的介绍信息
-7. 返回中嘌呤食物的介绍信息
+              text: `分析食物，返回JSON。要求：
+1. 识别所有食物
+2. 每个食物的嘌呤值（mg/100g）
+3. 分类：高嘌呤>150，中嘌呤50-150，低嘌呤<50
+4. 高/中嘌呤食物返回坐标{x1,y1,x2,y2}和介绍
 
-请严格按照以下JSON格式返回：
+返回JSON格式：
 {
   "high_purine_foods": [
     {
@@ -105,9 +99,12 @@ export async function analyzeFoodWithDoubao(imageBuffer: Buffer, mimeType: strin
 
 
     // 调用API（增加超时设置）
+    // 注意：Vercel免费版函数超时是10秒，Pro版可以到60秒
     console.log('准备调用豆包API，URL:', ARK_API_URL);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 50000); // 50秒超时
+    // 设置超时为8秒，确保在Vercel免费版10秒限制内完成
+    // 如果需要更长时间，需要升级到Vercel Pro
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8秒超时（Vercel免费版限制）
     
     const response = await fetch(ARK_API_URL, {
       method: 'POST',
