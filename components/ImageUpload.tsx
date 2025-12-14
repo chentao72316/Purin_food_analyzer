@@ -103,22 +103,27 @@ export default function ImageUpload({ onImageSelect, selectedImage, imagePreview
       return;
     }
 
-    // 如果图片大于1MB，进行压缩
-    if (file.size > 1 * 1024 * 1024) {
+    // 如果图片大于500KB，进行压缩（降低阈值以加快处理）
+    if (file.size > 500 * 1024) {
       setIsCompressing(true);
       try {
-        // 根据文件大小调整压缩参数
-        let maxWidth = 1920;
-        let maxHeight = 1920;
-        let quality = 0.8;
+        // 根据文件大小调整压缩参数（更激进的压缩策略）
+        let maxWidth = 1600;
+        let maxHeight = 1600;
+        let quality = 0.75;
 
-        if (file.size > 5 * 1024 * 1024) {
-          // 大于5MB，更激进的压缩
+        if (file.size > 3 * 1024 * 1024) {
+          // 大于3MB，非常激进的压缩
+          maxWidth = 1024;
+          maxHeight = 1024;
+          quality = 0.65;
+        } else if (file.size > 1.5 * 1024 * 1024) {
+          // 大于1.5MB，激进压缩
           maxWidth = 1280;
           maxHeight = 1280;
           quality = 0.7;
-        } else if (file.size > 2 * 1024 * 1024) {
-          // 大于2MB，中等压缩
+        } else if (file.size > 500 * 1024) {
+          // 大于500KB，中等压缩
           maxWidth = 1600;
           maxHeight = 1600;
           quality = 0.75;

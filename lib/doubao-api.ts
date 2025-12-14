@@ -30,49 +30,19 @@ export async function analyzeFoodWithDoubao(imageBuffer: Buffer, mimeType: strin
             },
             {
               type: 'input_text',
-              text: `请仔细分析这张图片中的食物，并返回JSON格式的结果。
-
-**关键要求：你必须识别的是实际的可食用食物本身，而不是容器、盘子、装饰物、背景或空区域。**
+              text: `分析图片中的食物，返回JSON格式结果。
 
 要求：
-1. **仔细观察图片，识别所有实际的可食用食物**（如：刺身片、肉类、蔬菜、水果等食材本身）
-   - 必须识别食物本身，而不是盛放食物的容器（如盘子、碗、竹筒、支架等）
-   - 必须识别食物本身，而不是装饰物（如冰块、叶子、花朵等）
-   - 必须识别食物本身，而不是背景或空白区域
-   
-2. 分析每个食物的嘌呤数值（每100克食物中的嘌呤含量，单位：毫克）
+1. 识别实际可食用食物（食材本身），不要识别容器、盘子、装饰物、背景
+2. 分析每个食物的嘌呤含量（mg/100g）
+3. 分类：高嘌呤>150，中嘌呤50-150，低嘌呤<50
+4. 坐标要求（重要）：
+   - 格式：{x1, y1, x2, y2}，基于图片原始尺寸（像素）
+   - 必须框选食物本身，不要框选容器、装饰物、背景
+   - 如果食物在容器中，只框选食物部分
+   - 同一类食物多个区域，分别返回坐标
 
-3. 根据嘌呤含量进行分类：
-   - 高嘌呤：>150毫克/100克
-   - 中嘌呤：50-150毫克/100克
-   - 低嘌呤：<50毫克/100克
-
-4. **坐标定位要求（极其重要）：**
-   - 坐标格式：{x1, y1, x2, y2}，表示左上角和右下角坐标
-   - 坐标原点(0,0)位于图片左上角
-   - 坐标必须基于图片的原始尺寸（像素）
-   - **必须框选实际的食物本身，精确到食物的边缘**
-   - **严禁框选以下非食物物体：**
-     * 容器（盘子、碗、竹筒、杯子等）
-     * 装饰物（冰块、叶子、花朵、支架等）
-     * 背景或空白区域
-     * 文字标签或说明牌
-   - 如果食物在容器中，只框选食物部分，不要包含容器边缘
-   - 如果同一类食物有多个区域，为每个区域分别返回坐标
-   - 坐标必须准确，框选范围应该紧贴食物的实际边界
-
-5. 返回高嘌呤食物的框选坐标和介绍信息
-
-6. 返回中嘌呤食物的框选坐标和介绍信息
-
-7. 返回低嘌呤食物的框选坐标和介绍信息（可选）
-
-**识别示例：**
-- 如果图片中有刺身拼盘，应该框选实际的刺身片（如三文鱼片、金枪鱼片等），而不是盛放刺身的盘子或支架
-- 如果图片中有装在竹筒中的食物，应该框选竹筒内的食物，而不是竹筒容器本身
-- 如果图片中有多个食物区域，应该为每个区域分别返回坐标
-
-请严格按照以下JSON格式返回：
+请返回JSON格式：
 {
   "high_purine_foods": [
     {
@@ -123,14 +93,21 @@ export async function analyzeFoodWithDoubao(imageBuffer: Buffer, mimeType: strin
     };
 
     // 调用API
+    const requestStartTime = Date.now();
     console.log('正在调用豆包API...');
     console.log('API URL:', ARK_API_URL);
     console.log('Endpoint ID:', ARK_ENDPOINT_ID);
+    console.log('图片大小:', `${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB`);
+    console.log('Base64大小:', `${(imageBase64.length / 1024 / 1024).toFixed(2)}MB`);
     
     // 创建带超时的 fetch 请求
-    // Vercel 免费版有 10 秒超时限制，我们设置 9 秒超时以确保有时间处理响应
+    // 区分本地和Vercel环境：本地使用30秒，Vercel使用9秒（10秒限制）
+    const isVercel = process.env.VERCEL === '1';
+    const timeoutDuration = isVercel ? 9000 : 30000; // Vercel: 9秒，本地: 30秒
+    console.log(`超时设置: ${timeoutDuration / 1000}秒 (${isVercel ? 'Vercel环境' : '本地环境'})`);
+    
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 9000); // 9秒超时，给响应处理留1秒
+    const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
     
     let response: Response;
     try {
@@ -146,13 +123,18 @@ export async function analyzeFoodWithDoubao(imageBuffer: Buffer, mimeType: strin
       clearTimeout(timeoutId);
     } catch (error: any) {
       clearTimeout(timeoutId);
+      const elapsedTime = Date.now() - requestStartTime;
       if (error.name === 'AbortError') {
-        throw new Error('API请求超时，请稍后重试。如果问题持续，请尝试使用更小的图片。');
+        console.error(`API请求超时 (${timeoutDuration / 1000}秒限制，实际耗时: ${(elapsedTime / 1000).toFixed(2)}秒)`);
+        console.error(`图片大小: ${(imageBuffer.length / 1024 / 1024).toFixed(2)}MB`);
+        throw new Error(`API请求超时（${timeoutDuration / 1000}秒）。建议：1) 使用更小的图片 2) 压缩图片后再上传 3) ${isVercel ? '考虑升级Vercel Pro计划' : '检查网络连接'}`);
       }
       throw error;
     }
 
+    const responseTime = Date.now() - requestStartTime;
     console.log('API响应状态:', response.status, response.statusText);
+    console.log(`API响应时间: ${(responseTime / 1000).toFixed(2)}秒`);
 
     if (!response.ok) {
       // 尝试读取错误响应体
